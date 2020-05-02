@@ -56,7 +56,7 @@ Material* material_load_internal(JSON* object)
 			ext_pos = tmp_name + strlen(tmp_name);
 		}
 		// Get the start of the fileNAME
-		// If not / succeeds, try \\ as crescent supports both (Win,Unix)
+		// If not / succeeds, try \\ as ridge supports both (Win,Unix)
 		const char* path_pos = NULL;
 		path_pos = strrchr(tmp_name, '/');
 		if (path_pos == NULL)

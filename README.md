@@ -1,13 +1,15 @@
 
 # Planned readme
 
-# crescent
-An open source game engine that gives you the power of both high level lua, and low level C
+# Ridge
+An open source game engine with the user in control.
 
-crescent is written in C and usea the Vulkan api for rendering (openGL planned). 
+Gives you the power of high level lua, and low level C
+
+ridge is written in C and usea the Vulkan api for rendering (openGL planned). 
 
 ## How does it work
-crescent builds and links as a static library. You create a C program (or C++), you can then initialize the engine whichever way you like or use th
+ridge builds and links as a static library. You create a C program (or C++), you can then initialize the engine whichever way you like or use th
 
 The advantage with this is this you can configure and make the game engine behave the way you want for your game.
 

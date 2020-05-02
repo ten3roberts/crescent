@@ -1,4 +1,4 @@
-#include "crescent.h"
+#include "ridge.h"
 
 static Window* window = NULL;
 

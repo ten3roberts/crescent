@@ -1,7 +1,7 @@
 workspace "sandbox"
 
--- Includes crescent from source
--- crescent is one dir up
+-- Includes ridge from source
+-- ridge is one dir up
 include ("../")
 
 project "sandbox"
@@ -16,6 +16,6 @@ project "sandbox"
 	-- Add shaders to compilation
 	files { "../assets/shaders/**.vert", "../assets/shaders/**.frag" }	
 
-	-- Link crescent and GLFW
-	-- Vulkan is linked by crescent
-	links { "crescent", "GLFW" }
+	-- Link ridge and GLFW
+	-- Vulkan is linked by ridge
+	links { "ridge", "GLFW" }
