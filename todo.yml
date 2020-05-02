@@ -1,0 +1,27 @@
+Renderer:
+  - Optional dynamic pipelines that don't resize, not all need to be dynamic
+  - Rerecording of command queues
+  - One uniform buffer for all entities positions to render
+  - Push constants
+  - Remove global variables used bby vulkan
+
+Entities:
+  - Implement entities
+  - Lua scripting
+  - Transform and Rigidbodies
+  - Collision detection
+  - Quadtree collision pruning
+
+Vulkan bugs:
+  - Image extent outside of bounds when resizing (nonfatal)
+  - When skipping image aquire when waiting for resizes, there is a chance that uniform updates could get an invalid frame
+
+General bugs:
+  
+Window:
+  - Mouse pointer options
+  - Hide cursor
+  - Window icon
+
+General Features:
+  - (done) Hashtable leak trace

@@ -5,17 +5,16 @@
 #include "log.h"
 #include "utils.h"
 #include "math/math.h"
-#include "vulkan.h"
-#include "swapchain.h"
+#include "graphics/graphics.h"
 #include "uniforms.h"
 #include "settings.h"
 #include "cr_time.h"
-#include "texture.h"
+#include "graphics/texture.h"
 #include "buffer.h"
 #include "magpie.h"
+#include "graphics/model.h"
+#include "graphics/material.h"
 #include <stdbool.h>
-#include "model.h"
-#include "material.h"
 
 Model* model_cube;
 Model* model;
@@ -85,9 +84,9 @@ int create_instance()
 {
 	VkApplicationInfo appInfo = {0};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.pApplicationName = "crescent";
+	appInfo.pApplicationName = "ridge";
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.pEngineName = "crescent";
+	appInfo.pEngineName = "ridge";
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion = VK_API_VERSION_1_0;
 
@@ -466,21 +465,6 @@ int create_image_views()
 	return 0;
 }
 
-VkShaderModule create_shader_module(char* code, size_t size)
-{
-	VkShaderModuleCreateInfo createInfo = {0};
-	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	createInfo.codeSize = size;
-	createInfo.pCode = (uint32_t*)code;
-	VkShaderModule shader_module;
-	VkResult result = vkCreateShaderModule(device, &createInfo, NULL, &shader_module);
-	if (result != VK_SUCCESS)
-	{
-		LOG_E("Failed to create shader module - code %d", result);
-	}
-	return shader_module;
-}
-
 int create_render_pass()
 {
 	// Frame buffer
@@ -571,227 +555,6 @@ int create_render_pass()
 	return 0;
 }
 
-int create_graphics_pipeline(struct PipelineCreateInfo* createinfo, VkPipelineLayout* dst_pipeline_layout,
-							 VkPipeline* dst_pipeline)
-{
-	// Read vertex shader from SPIR-V
-	size_t vert_code_size = read_fileb(createinfo->vertexshader, NULL);
-	if (vert_code_size == 0)
-	{
-		LOG_E("Failed to read vertex shader %s from binary file", createinfo->vertexshader);
-		return -1;
-	}
-	char* vert_shader_code = malloc(vert_code_size);
-	read_fileb(createinfo->vertexshader, vert_shader_code);
-
-	// Read fragment shader from SPIR-V
-	size_t frag_code_size = read_fileb(createinfo->fragmentshader, NULL);
-	if (vert_code_size == 0)
-	{
-		LOG_E("Failed to read vertex shader %s from binary file", "./assets/shaders/standard.frag.spv");
-		return -1;
-	}
-	char* frag_shader_code = malloc(frag_code_size);
-	read_fileb(createinfo->fragmentshader, frag_shader_code);
-
-	VkShaderModule vert_shader_module = create_shader_module(vert_shader_code, vert_code_size);
-	VkShaderModule frag_shader_module = create_shader_module(frag_shader_code, frag_code_size);
-
-	// Shader stage creation
-	// Vertex shader
-	VkPipelineShaderStageCreateInfo shader_stage_infos[2] = {{0}, {0}};
-	// Create infos for the shaders
-	// 0 - vertex shader
-	// 1 - fragment shader
-
-	shader_stage_infos[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shader_stage_infos[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-	shader_stage_infos[0].module = vert_shader_module;
-	shader_stage_infos[0].pName = "main";
-	shader_stage_infos[0].pSpecializationInfo = NULL;
-
-	// Fragment shader
-	shader_stage_infos[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shader_stage_infos[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	shader_stage_infos[1].module = frag_shader_module;
-	shader_stage_infos[1].pName = "main";
-	shader_stage_infos[1].pSpecializationInfo = NULL;
-
-	// Vertex input
-	// Specify the data the vertex shader takes as input
-	VertexInputDescription vertex_description = createinfo->vertex_description;
-	VkPipelineVertexInputStateCreateInfo vertex_input_info = {0};
-	vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertex_input_info.vertexBindingDescriptionCount = 1;
-	vertex_input_info.pVertexBindingDescriptions = &vertex_description.binding_description;
-	vertex_input_info.vertexAttributeDescriptionCount = vertex_description.attribute_count;
-	vertex_input_info.pVertexAttributeDescriptions = vertex_description.attributes;
-
-	// Input assembly
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {0};
-	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-	inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-	// Specify viewports and scissors
-	VkViewport viewport = {0};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = (float)swapchain_extent.width;
-	viewport.height = (float)swapchain_extent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	// Specify a scissor rectangle that covers the entire frame buffer
-	VkRect2D scissor = {0};
-	scissor.offset = (VkOffset2D){0, 0};
-	scissor.extent = swapchain_extent;
-
-	// Combine viewport and scissor into a viewport state
-	VkPipelineViewportStateCreateInfo viewportState = {0};
-	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewportState.viewportCount = 1;
-	viewportState.pViewports = &viewport;
-	viewportState.scissorCount = 1;
-	viewportState.pScissors = &scissor;
-
-	// Rasterizer
-	VkPipelineRasterizationStateCreateInfo rasterizer = {0};
-	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterizer.depthClampEnable = VK_FALSE;
-	rasterizer.rasterizerDiscardEnable = VK_FALSE;
-	// Fills the polygons
-	// Drawing lines or points requires enabling a GPU feature
-	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-	rasterizer.lineWidth = 1.0f;
-
-	// Cull mode
-	rasterizer.cullMode = VK_CULL_MODE_NONE;
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
-
-	rasterizer.depthBiasEnable = VK_FALSE;
-	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-	rasterizer.depthBiasClamp = 0.0f;		   // Optional
-	rasterizer.depthBiasSlopeFactor = 0.0f;	   // Optional
-
-	// Multisampling
-	// Requires GPU feature
-	// For now, disable it
-	VkPipelineMultisampleStateCreateInfo multisampling = {0};
-	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = msaa_samples;
-	multisampling.minSampleShading = 1.0f;			// Optional
-	multisampling.pSampleMask = NULL;				// Optional
-	multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-	multisampling.alphaToOneEnable = VK_FALSE;		// Optional
-
-	// No depth and stencil testing for now
-
-	// Color blending
-	// For now, disabled
-	VkPipelineColorBlendAttachmentState colorBlendAttachment = {0};
-	colorBlendAttachment.colorWriteMask =
-		VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	colorBlendAttachment.blendEnable = VK_FALSE;
-	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;	 // Optional
-	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;			 // Optional
-	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;	 // Optional
-	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;			 // Optional
-
-	VkPipelineColorBlendStateCreateInfo colorBlending = {0};
-	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlending.logicOpEnable = VK_FALSE;
-	colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-	colorBlending.attachmentCount = 1;
-	colorBlending.pAttachments = &colorBlendAttachment;
-	colorBlending.blendConstants[0] = 0.0f; // Optional
-	colorBlending.blendConstants[1] = 0.0f; // Optional
-	colorBlending.blendConstants[2] = 0.0f; // Optional
-	colorBlending.blendConstants[3] = 0.0f; // Optional
-
-	// Depth buffer
-	VkPipelineDepthStencilStateCreateInfo depthStencil = {0};
-	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencil.depthTestEnable = VK_TRUE;
-	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-
-	// Don't use bounds
-	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.minDepthBounds = 0.0f; // Optional
-	depthStencil.maxDepthBounds = 1.0f; // Optional
-
-	// Disable stencil
-	depthStencil.stencilTestEnable = VK_FALSE;
-	depthStencil.front = (VkStencilOpState){0}; // Optional
-	depthStencil.back = (VkStencilOpState){0};	// Optional
-
-	// Dynamic states
-	VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH};
-
-	VkPipelineDynamicStateCreateInfo dynamicState = {0};
-	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamicState.dynamicStateCount = 2;
-	dynamicState.pDynamicStates = dynamicStates;
-
-	// Pipeline layout
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {0};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = createinfo->descriptor_layout_count;
-	pipelineLayoutInfo.pSetLayouts = createinfo->descriptor_layouts;
-	pipelineLayoutInfo.pushConstantRangeCount = 0; // TODO
-	pipelineLayoutInfo.pPushConstantRanges = NULL; // TODO
-	VkResult result = vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, dst_pipeline_layout);
-	if (result != VK_SUCCESS)
-	{
-		LOG_E("Failed to create pipeline layout - code %d", result);
-		return -1;
-	}
-	VkGraphicsPipelineCreateInfo pipelineInfo = {0};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.flags = 0;
-	pipelineInfo.stageCount = 2;
-	pipelineInfo.pStages = shader_stage_infos;
-
-	pipelineInfo.pVertexInputState = &vertex_input_info;
-	pipelineInfo.pInputAssemblyState = &inputAssembly;
-	pipelineInfo.pViewportState = &viewportState;
-	pipelineInfo.pRasterizationState = &rasterizer;
-	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pDepthStencilState = &depthStencil;
-	pipelineInfo.pColorBlendState = &colorBlending;
-	pipelineInfo.pDynamicState = NULL; // Optional
-
-	// Reference pipeline layout
-	pipelineInfo.layout = *dst_pipeline_layout;
-
-	// Render passes
-	pipelineInfo.renderPass = renderPass;
-	pipelineInfo.subpass = 0;
-
-	// Create an entirely new pipeline, not deriving from an old one
-	// VK_PIPELINE_CREATE_DERIVATE_BIT needs to be specified in createInfo
-	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-	pipelineInfo.basePipelineIndex = -1;			  // Optional
-
-	result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, dst_pipeline);
-	if (result != VK_SUCCESS)
-	{
-		LOG_E("Failed to create graphics - code %d", result);
-		return -2;
-	}
-	// Free the temporary resources
-	free(vert_shader_code);
-	free(frag_shader_code);
-
-	// Modules are not needed after the creaton
-	vkDestroyShaderModule(device, vert_shader_module, NULL);
-	vkDestroyShaderModule(device, frag_shader_module, NULL);
-	return 0;
-}
 
 int create_color_buffer()
 {
@@ -966,7 +729,7 @@ int create_sync_objects()
 	return 0;
 }
 
-int vulkan_init()
+int graphics_init()
 {
 	window = application_get_window();
 	// Create a vulkan instance
@@ -1024,7 +787,7 @@ int vulkan_init()
 	descriptorpack_create(global_descriptor_layout, bindings, 1,
 						  (UniformBuffer**)&ub, (Texture**)&tex, &global_descriptors);
 
-	material = material_create("./assets/materials/grid.json");
+	material = material_load("./assets/materials/grid.json");
 
 	if (create_color_buffer())
 	{
@@ -1051,7 +814,7 @@ int vulkan_init()
 	return 0;
 }
 
-void vulkan_terminate()
+void graphics_terminate()
 {
 	LOG_S("Terminating vulkan");
 
@@ -1063,7 +826,10 @@ void vulkan_terminate()
 		model_destroy(model);
 
 	vkDestroyDescriptorSetLayout(device, global_descriptor_layout, NULL);
+
+	// Free textures and materials
 	material_destroy_all();
+	texture_destroy_all();
 
 	if (global_descriptors.count)
 		descriptorpack_destroy(&global_descriptors);
@@ -1073,6 +839,9 @@ void vulkan_terminate()
 
 	vb_pools_destroy();
 
+
+
+
 	// Wait for device to finish operations before cleaning up
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
@@ -1080,7 +849,7 @@ void vulkan_terminate()
 		vkDestroySemaphore(device, semaphores_image_available[i], NULL);
 		vkDestroyFence(device, in_flight_fences[i], NULL);
 	}
-	vkDestroyRenderPass(device, renderPass, NULL);
+
 	vkDestroyCommandPool(device, command_pool, NULL);
 
 	vkDestroyDevice(device, NULL);

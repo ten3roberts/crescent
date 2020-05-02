@@ -52,7 +52,6 @@ int normalize(double* val)
 void ftoa_sci(char* buffer, double value)
 {
 	int exponent = 0;
-	int places = 0;
 	static const int width = 4;
 
 	// If value is 0,
@@ -96,7 +95,7 @@ size_t last_log_length = 0;
 size_t last_log_frame = 0;
 int last_color = CONSOLE_WHITE;
 
-#if DEBUG
+#ifdef DEBUG
 #define WRITE(s)                                                                                                       \
 	fputs(s, stdout), fputs(s, log_file);                                                                              \
 	fflush(log_file);                                                                                                  \

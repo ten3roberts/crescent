@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
+#include "magpie.h"
 
 #if PL_LINUX
 #include <unistd.h>
@@ -128,8 +129,7 @@ void create_dirs(const char* path)
 		{
 			strncpy(buf, path, i + 1);
 			buf[i + 1] = '\0';
-			if (!strcmp(buf, "./") || !strcmp(buf, "../") || !strcmp(buf, "") || !strcmp(buf + 1, ":") ||
-				!strcmp(buf, ".\\") || !strcmp(buf, "..\\"))
+			if (!strcmp(buf, "./") || !strcmp(buf, "../") || !strcmp(buf, "") || !strcmp(buf + 1, ":") || !strcmp(buf, ".\\") || !strcmp(buf, "..\\"))
 				continue;
 			mkdir(buf, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		}
@@ -249,8 +249,7 @@ void create_dirs(const char* path)
 		{
 			strncpy(buf, path, i + 1);
 			buf[i + 1] = '\0';
-			if (!strcmp(buf, "./") || !strcmp(buf, "../") || !strcmp(buf, "") || !strcmp(buf + 1, ":") ||
-				!strcmp(buf, ".\\") || !strcmp(buf, "..\\"))
+			if (!strcmp(buf, "./") || !strcmp(buf, "../") || !strcmp(buf, "") || !strcmp(buf + 1, ":") || !strcmp(buf, ".\\") || !strcmp(buf, "..\\"))
 				continue;
 			CreateDirectoryA(buf, NULL);
 		}
@@ -442,7 +441,7 @@ void replace_string(const char* src, char* result, size_t size, char find, char 
 	}
 }
 
-char* string_dup(const char* s)
+char* stringdup_internal(const char* s)
 {
 	size_t slen = strlen(s);
 	char* result = malloc(slen + 1);
@@ -453,4 +452,18 @@ char* string_dup(const char* s)
 
 	memcpy(result, s, slen + 1);
 	return result;
+}
+
+int strcmp_s(const char* str1, const char* str2)
+{
+	// Either both are NULL or the same location string
+	if (str1 == str2)
+		return 0;
+	if (str1 == NULL && str2 != NULL)
+		return 1;
+	if (str1 != NULL && str2 == NULL)
+		return 1;
+		
+	// C stdlib strcmp
+	return strcmp(str1, str2);
 }

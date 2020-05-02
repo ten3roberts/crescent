@@ -1,14 +1,13 @@
 #include "vulkan_members.h"
 #include "vulkan_internal.h"
-#include "swapchain.h"
-#include "vulkan.h"
+#include "graphics/graphics.h"
 #include "magpie.h"
 #include "log.h"
 #include "graphics/uniforms.h"
+#include "graphics/pipeline.h"
 
 int swapchain_create()
 {
-
 	SwapchainSupportDetails support = get_swapchain_support(physical_device);
 	VkSurfaceFormatKHR surface_format = pick_swap_surface_format(support.formats, support.format_count);
 	VkPresentModeKHR present_mode = pick_swap_present_mode(support.present_modes, support.present_mode_count);
@@ -90,12 +89,13 @@ int swapchain_recreate()
 	swapchain_create();
 	create_image_views();
 	create_render_pass();
-	// TODO : create_graphics_pipeline();
+
+	pipeline_recreate_all();
+
 	create_color_buffer();
 	create_depth_buffer();
 	create_framebuffers();
-	ub = ub_create(sizeof(TransformType), 0);
-	// create_descriptor_pool();
+
 	create_command_buffers();
 	return 0;
 }
@@ -110,9 +110,12 @@ int swapchain_destroy()
 	vkDestroyImage(device, depth_image, NULL);
 	vkFreeMemory(device, depth_image_memory, NULL);
 
-	// vkDestroyDescriptorPool(device, descriptor_pool, NULL);
 	for (size_t i = 0; i < framebuffer_count; i++)
 		vkDestroyFramebuffer(device, framebuffers[i], NULL);
+
+	// Destroy render pass
+	vkDestroyRenderPass(device, renderPass, NULL);
+	renderPass = NULL;
 
 	vkFreeCommandBuffers(device, command_pool, command_buffer_count, command_buffers);
 
