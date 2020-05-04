@@ -7,7 +7,7 @@
 #include "uniforms.h"
 
 
-#define MAX_FRAMES_IN_FLIGHT 2
+#define MAX_FRAMES_IN_FLIGHT 3
 
 #define GRAPHICS_FAMILY_VALID_BIT 0b1
 #define PRESENT_FAMILY_VALID_BIT  0b01
@@ -82,9 +82,6 @@ extern VkSampleCountFlagBits msaa_samples;
 
 extern VkCommandPool command_pool;
 
-extern VkCommandBuffer* command_buffers;
-extern size_t command_buffer_count;
-
 // Semaphores
 extern VkSemaphore semaphores_image_available[MAX_FRAMES_IN_FLIGHT];
 extern VkSemaphore semaphores_render_finished[MAX_FRAMES_IN_FLIGHT];
@@ -110,6 +107,4 @@ extern const int enable_validation_layers;
 
 extern void* ub;
 extern void* ub2;
-
-extern void* tex;
 #endif

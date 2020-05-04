@@ -14,6 +14,7 @@
 #include "magpie.h"
 #include "graphics/model.h"
 #include "graphics/material.h"
+#include "graphics/pipeline.h"
 #include <stdbool.h>
 
 Model* model_cube;
@@ -618,7 +619,8 @@ int create_command_pool()
 	VkCommandPoolCreateInfo poolInfo = {0};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphics;
-	poolInfo.flags = 0; // Optional
+	// Enables the renderer to individually reset command buffers
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Optional
 	VkResult result = vkCreateCommandPool(device, &poolInfo, NULL, &command_pool);
 	if (result != VK_SUCCESS)
 	{
@@ -628,7 +630,7 @@ int create_command_pool()
 	return 0;
 }
 
-int create_command_buffers()
+/*int create_command_buffers()
 {
 	command_buffer_count = framebuffer_count;
 	command_buffers = malloc(command_buffer_count * sizeof(VkCommandBuffer));
@@ -682,7 +684,6 @@ int create_command_buffers()
 		model_bind(model, command_buffers[i]);
 		vkCmdDrawIndexed(command_buffers[i], model_get_index_count(model), 1, 0, 0, 0);
 
-		vkCmdEndRenderPass(command_buffers[i]);
 		result = vkEndCommandBuffer(command_buffers[i]);
 		if (result != VK_SUCCESS)
 		{
@@ -691,7 +692,7 @@ int create_command_buffers()
 		}
 	}
 	return 0;
-}
+}*/
 
 int create_sync_objects()
 {
@@ -785,8 +786,9 @@ int graphics_init()
 
 	descriptorlayout_create(bindings, 1, &global_descriptor_layout);
 	descriptorpack_create(global_descriptor_layout, bindings, 1,
-						  (UniformBuffer**)&ub, (Texture**)&tex, &global_descriptors);
+						  (UniformBuffer**)&ub, NULL, &global_descriptors);
 
+	//material = material_load("./assets/materials/grid.json");
 	material = material_load("./assets/materials/grid.json");
 
 	if (create_color_buffer())
@@ -802,10 +804,10 @@ int graphics_init()
 		return -11;
 	}
 
-	if (create_command_buffers())
+	/*if (create_command_buffers())
 	{
 		return -13;
-	}
+	}*/
 	if (create_sync_objects())
 	{
 		return -14;
@@ -829,7 +831,10 @@ void graphics_terminate()
 
 	// Free textures and materials
 	material_destroy_all();
+	model_destroy_all();
 	texture_destroy_all();
+
+	pipeline_destroy_all();
 
 	if (global_descriptors.count)
 		descriptorpack_destroy(&global_descriptors);

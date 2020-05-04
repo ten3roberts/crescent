@@ -13,32 +13,42 @@ int application_start(int argc, char** argv)
 	settings_load();
 
 	window = window_create("sandbox", settings_get_resolution().x, settings_get_resolution().y, settings_get_window_style(), 1);
-
+	window_set_icon(window, "./assets/textures/ridge64.png", "./assets/textures/ridge1024.png");
 	if (window == NULL)
 		return -1;
 
 	input_init(window);
 	graphics_init();
+	renderer_init();
 
 	LOG_S("Initialization took %f ms", timer_stop(&timer) * 1000);
 
 	timer_reset(&timer);
 	time_init();
-	swapchain_resize = 0;
+
+	Scene* scene = scene_create("main");
+	(void)model_load_collada("./assets/models/cube.dae");
+	(void)material_load("./assets/materials/concrete.json");
+
+	Entity* entity1 = entity_create("entity1", "grid", "Cube", (Transform){(vec3){0,0,-1}, quat_identity, vec3_one});
+	Entity* entity2 = entity_create("entity2", "concrete", "Cube", (Transform){(vec3){5, 0.5, -10}, quat_identity, vec3_one});
+
 	while (!window_get_close(window))
 	{
 		// Poll window events
 		window_update(window);
 		renderer_begin();
-		if (window_get_minimized(window))
-		{
-			SLEEP(0.1);
-		}
+
+		scene_update(scene);
+		
+		entity_get_transform(entity1)->position.z = -5;
+		entity_get_transform(entity1)->rotation = quat_euler((vec3){0, time_elapsed(), 0});
+		entity_get_transform(entity2)->rotation = quat_euler((vec3){time_elapsed(), 0, 0});
 
 		input_update();
 
 		time_update();
-		renderer_draw();
+		renderer_submit();
 
 		if (timer_duration(&timer) > 2.0f)
 		{
@@ -46,6 +56,8 @@ int application_start(int argc, char** argv)
 			LOG("Framerate %d %f", time_framecount(), time_framerate());
 		}
 	}
+	scene_destroy_entities(scene);
+	scene_destroy(scene);
 	graphics_terminate();
 	LOG_S("Terminating");
 	window_destroy(window);

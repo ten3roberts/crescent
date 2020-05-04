@@ -12,6 +12,7 @@
 
 // A linked list tracking all loaded materials
 static hashtable_t* material_table = NULL;
+static Material* material_default = NULL;
 
 #define GLOBAL_DESCRIPTOR_INDEX	  0
 #define MATERIAL_DESCRIPTOR_INDEX 1
@@ -27,6 +28,9 @@ struct Material
 	VkDescriptorSetLayout descriptor_layouts[2];
 	DescriptorPack material_descriptors;
 	Pipeline* pipeline;
+
+	VkPushConstantRange push_constants[4];
+	uint32_t push_constant_count;
 
 	// The material indexes are specified by the json bindings
 	uint32_t texture_count;
@@ -69,7 +73,7 @@ Material* material_load_internal(JSON* object)
 		if (lname > sizeof mat->name)
 			lname = sizeof mat->name;
 		// Allocate memory for the name
-		memcpy(mat->name, path_pos + 1, lname);
+		memcpy(mat->name, path_pos + 1, lname - 1);
 		mat->name[lname] = '\0';
 	}
 
@@ -100,6 +104,7 @@ Material* material_load_internal(JSON* object)
 	}
 	const int material_binding_count = json_get_count(jbindings);
 
+	// Freed on destruction of pipeline
 	VkDescriptorSetLayoutBinding* material_bindings = malloc(material_binding_count * sizeof(VkDescriptorSetLayoutBinding));
 	// Iterate and fill out the bindings
 	JSON* bindcur = json_get_elements(jbindings);
@@ -178,6 +183,7 @@ Material* material_load_internal(JSON* object)
 	// Create the material descriptors
 	descriptorpack_create(mat->descriptor_layouts[MATERIAL_DESCRIPTOR_INDEX], material_bindings, material_binding_count, NULL, mat->textures, &mat->material_descriptors);
 
+
 	free(material_bindings);
 	// Load the shaders
 	// Get the shader names temporarily
@@ -195,11 +201,22 @@ Material* material_load_internal(JSON* object)
 	struct PipelineInfo pipeline_info = {0};
 	pipeline_info.descriptor_layout_count = 2;
 	pipeline_info.descriptor_layouts = mat->descriptor_layouts;
+
+	snprintf(pipeline_info.vertexshader, sizeof pipeline_info.vertexshader, "%s", vertexshader);
+	snprintf(pipeline_info.fragmentshader, sizeof pipeline_info.fragmentshader, "%s", fragmentshader);
+	snprintf(pipeline_info.geometryshader, sizeof pipeline_info.geometryshader, "%s", "");
+
+	// Define one push constant for model matrix
+	mat->push_constant_count = 1;
+	mat->push_constants[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	mat->push_constants[0].offset = 0;
+	mat->push_constants[0].size = PUSH_CONSTANT_SIZE;
+
+	pipeline_info.push_constant_count = 1;
+	pipeline_info.push_constants = malloc(pipeline_info.push_constant_count * sizeof(VkPushConstantRange));
+	memcpy(pipeline_info.push_constants, mat->push_constants, mat->push_constant_count * sizeof(VkPushConstantRange));
+
 	// Passed to pipeline. Freeing handled inside pipeline
-	pipeline_info.vertexshader = stringdup(vertexshader);
-	// Passed to pipeline. Freeing handled inside pipeline
-	pipeline_info.fragmentshader = stringdup(fragmentshader);
-	pipeline_info.geometryshader = NULL;
 	pipeline_info.vertex_description = vertex_get_description();
 	mat->pipeline = pipeline_get(&pipeline_info);
 	if (mat->pipeline == NULL)
@@ -258,6 +275,33 @@ Material* material_get(const char* name)
 	return hashtable_find(material_table, name);
 }
 
+Material* material_get_default()
+{
+	if (material_default)
+		return material_default;
+
+	// Create the default material
+	JSON* root = json_create_object();
+
+	json_add_member(root, "name", json_create_string("default"));
+	json_add_member(root, "albedo", json_create_string("col:white"));
+	json_add_member(root, "vertexshader", json_create_string("./assets/shaders/default.vert.spv"));
+	json_add_member(root, "fragmentshader", json_create_string("./assets/shaders/default.frag.spv"));
+	JSON* bindings = json_create_array();
+	JSON* binding = json_create_object();
+	json_add_member(binding, "binding", json_create_number(0));
+	json_add_member(binding, "texture", json_create_string("albedo"));
+	json_add_member(binding, "type", json_create_string("sampler"));
+	json_add_member(binding, "stage", json_create_string("fragment"));
+	json_add_element(bindings, binding);
+	json_add_member(root, "bindings", bindings);
+
+	material_default = material_load_internal(root);
+
+	json_destroy(root);
+	return material_default;
+}
+
 void material_bind(Material* mat, VkCommandBuffer command_buffer, uint32_t frame)
 {
 	if (frame == -1)
@@ -267,11 +311,17 @@ void material_bind(Material* mat, VkCommandBuffer command_buffer, uint32_t frame
 
 	// Get the layout from the pipeline
 	VkPipelineLayout pipeline_layout = pipeline_get_layout(mat->pipeline);
-	
+
 	// Bind global set 0
 	vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &global_descriptors.sets[frame], 0, NULL);
 	// Bind material set 1
 	vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 1, 1, &mat->material_descriptors.sets[frame], 0, NULL);
+}
+
+void material_push_constants(Material* mat, VkCommandBuffer command_buffer, uint32_t index, void* data)
+{
+	vkCmdPushConstants(command_buffer, pipeline_get_layout(mat->pipeline), mat->push_constants[index].stageFlags, mat->push_constants[index].offset,
+					   mat->push_constants[index].size, data);
 }
 
 void material_destroy(Material* mat)
@@ -292,8 +342,6 @@ void material_destroy(Material* mat)
 	{
 		texture_destroy(mat->textures[i]);
 	}
-
-	pipeline_destroy(mat->pipeline);
 
 	descriptorpack_destroy(&mat->material_descriptors);
 	vkDestroyDescriptorSetLayout(device, mat->descriptor_layouts[MATERIAL_DESCRIPTOR_INDEX], NULL);
